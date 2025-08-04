@@ -1,0 +1,20 @@
+{
+  "name": "agent-simulator",
+  "version": "1.0.0",
+  "description": "Stream-Aware Agent Playground - AI Agent Simulator with voice communication",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.1.0",
+    "redis": "^5.7.0",
+    "uuid": "^11.1.0"
+  }
+}
