@@ -24,7 +24,9 @@ class Agent {
       totalSpeakingTime: 0,
       interactions: [],
       llmCalls: 0,
-      ttsCalls: 0
+      ttsCalls: 0,
+      voiceInteractions: 0,
+      avgResponseTime: 0
     };
     
     // AI Configuration
@@ -42,6 +44,14 @@ class Agent {
         pitch: config.tts?.pitch || 1.0
       }
     };
+
+    // WebRTC and Voice Properties
+    this.roomId = null;
+    this.voiceId = this.config.tts.voiceId;
+    this.currentSpeechId = null;
+    this.listeningToVoice = false;
+    this.speakingQueue = [];
+    this.voiceHistory = [];
 
     // Set voice profile if provided
     if (this.config.tts.voiceId) {
@@ -356,6 +366,211 @@ class Agent {
       interactions: []
     };
     return agent;
+  }
+
+  /**
+   * Set agent's room context
+   * @param {string} roomId - Room identifier
+   */
+  setRoom(roomId) {
+    this.roomId = roomId;
+    this.lastActivity = new Date().toISOString();
+    console.log(`🏠 Agent ${this.agentId} set to room ${roomId}`);
+  }
+
+  /**
+   * Clear agent's room context
+   */
+  clearRoom() {
+    this.roomId = null;
+    this.lastActivity = new Date().toISOString();
+    console.log(`🚪 Agent ${this.agentId} cleared from room`);
+  }
+
+  /**
+   * Process voice input and generate appropriate response
+   * @param {Object} voiceInput - Voice input data
+   * @returns {Object} Response with text and audio generation request
+   */
+  async processVoiceInput(voiceInput) {
+    const { text, confidence, sessionId, timestamp } = voiceInput;
+    
+    this.setStatus('processing');
+    this.metadata.voiceInteractions++;
+    
+    // Add voice input to history
+    this.addMessage({
+      type: 'voice_received',
+      content: text,
+      from: 'human',
+      to: this.agentId,
+      confidence,
+      sessionId,
+      timestamp
+    });
+
+    // Add to voice history
+    this.voiceHistory.push({
+      type: 'input',
+      text,
+      confidence,
+      timestamp,
+      sessionId
+    });
+
+    try {
+      const startTime = Date.now();
+      
+      // Generate response using LLM
+      const llmService = require('../services/llmService');
+      const context = this.getConversationContext(10);
+      
+      const llmResponse = await llmService.generateResponse(
+        this.agentId,
+        this.persona,
+        context,
+        this.config.llm
+      );
+
+      // Record response time
+      const responseTime = Date.now() - startTime;
+      this.metadata.avgResponseTime = (this.metadata.avgResponseTime + responseTime) / 2;
+
+      // Create response message
+      const response = {
+        type: 'voice_response',
+        content: llmResponse.text,
+        from: this.agentId,
+        to: 'room',
+        llmProvider: llmResponse.provider,
+        llmModel: llmResponse.model,
+        responseTime,
+        triggerType: 'voice'
+      };
+
+      this.addMessage(response);
+      
+      // Add to voice history
+      this.voiceHistory.push({
+        type: 'output',
+        text: llmResponse.text,
+        timestamp: new Date().toISOString(),
+        responseTime
+      });
+
+      this.setStatus('idle');
+
+      console.log(`🎙️ Agent ${this.agentId} processed voice input: "${text}" → "${llmResponse.text}"`);
+
+      return {
+        ...response,
+        shouldSpeak: true,
+        ttsConfig: this.config.tts
+      };
+
+    } catch (error) {
+      console.error(`❌ Error processing voice input for agent ${this.agentId}:`, error);
+      this.setStatus('idle');
+      throw error;
+    }
+  }
+
+  /**
+   * Queue speech for agent
+   * @param {string} text - Text to speak
+   * @param {Object} options - Speech options
+   */
+  queueSpeech(text, options = {}) {
+    const speechId = uuidv4();
+    const speechRequest = {
+      id: speechId,
+      text,
+      timestamp: new Date().toISOString(),
+      priority: options.priority || 'normal',
+      config: { ...this.config.tts, ...options }
+    };
+
+    if (options.priority === 'high') {
+      this.speakingQueue.unshift(speechRequest);
+    } else {
+      this.speakingQueue.push(speechRequest);
+    }
+
+    console.log(`📝 Agent ${this.agentId} queued speech: "${text}" (queue size: ${this.speakingQueue.length})`);
+    return speechId;
+  }
+
+  /**
+   * Get next speech from queue
+   * @returns {Object|null} Next speech request or null if queue is empty
+   */
+  getNextSpeech() {
+    return this.speakingQueue.shift() || null;
+  }
+
+  /**
+   * Clear speaking queue
+   */
+  clearSpeakingQueue() {
+    this.speakingQueue = [];
+    console.log(`🗑️ Agent ${this.agentId} cleared speaking queue`);
+  }
+
+  /**
+   * Start speaking (update status and metadata)
+   * @param {string} speechId - Speech identifier
+   */
+  startSpeaking(speechId) {
+    this.setStatus('speaking');
+    this.currentSpeechId = speechId;
+    this.metadata.speakingStartTime = Date.now();
+    
+    console.log(`🗣️ Agent ${this.agentId} started speaking (speechId: ${speechId})`);
+  }
+
+  /**
+   * Stop speaking (update status and metadata)
+   */
+  stopSpeaking() {
+    if (this.currentSpeechId && this.metadata.speakingStartTime) {
+      const speakingDuration = Date.now() - this.metadata.speakingStartTime;
+      this.metadata.totalSpeakingTime += speakingDuration;
+      
+      console.log(`🤐 Agent ${this.agentId} stopped speaking after ${speakingDuration}ms`);
+    }
+
+    this.setStatus('listening');
+    this.currentSpeechId = null;
+    this.metadata.speakingStartTime = null;
+  }
+
+  /**
+   * Get voice interaction statistics
+   * @returns {Object} Voice stats
+   */
+  getVoiceStats() {
+    return {
+      agentId: this.agentId,
+      roomId: this.roomId,
+      status: this.status,
+      currentSpeechId: this.currentSpeechId,
+      speakingQueueLength: this.speakingQueue.length,
+      voiceInteractions: this.metadata.voiceInteractions,
+      totalSpeakingTime: this.metadata.totalSpeakingTime,
+      avgResponseTime: this.metadata.avgResponseTime,
+      voiceHistoryLength: this.voiceHistory.length,
+      isCurrentlySpeaking: this.status === 'speaking',
+      isListening: this.status === 'listening'
+    };
+  }
+
+  /**
+   * Get recent voice history
+   * @param {number} limit - Maximum number of entries to return
+   * @returns {Array} Recent voice interactions
+   */
+  getVoiceHistory(limit = 10) {
+    return this.voiceHistory.slice(-limit);
   }
 
   /**
