@@ -21,6 +21,7 @@
     "@deepgram/sdk": "^4.11.1",
     "@elevenlabs/elevenlabs-js": "^2.7.0",
     "axios": "^1.11.0",
+    "cors": "^2.8.5",
     "express": "^5.1.0",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.3",
@@ -30,6 +31,7 @@
     "node-wav": "^0.0.2",
     "openai": "^5.11.0",
     "redis": "^5.7.0",
+    "socket.io": "^4.8.1",
     "uuid": "^11.1.0",
     "ws": "^8.18.3"
   }

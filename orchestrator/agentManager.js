@@ -1,3 +1,4 @@
+const { EventEmitter } = require('events');
 const Agent = require('../agents/Agent');
 const redisService = require('../services/redisService');
 const MediasoupBotClient = require('../services/mediasoupBotClient');
@@ -9,8 +10,9 @@ const { v4: uuidv4 } = require('uuid');
 /**
  * AgentManager - Orchestrates all agents in the simulation with Mediasoup integration
  */
-class AgentManager {
+class AgentManager extends EventEmitter {
   constructor() {
+    super(); // Initialize EventEmitter
     this.agents = new Map(); // Map of agentId -> Agent instance
     this.agentConnections = new Map(); // Map of agentId -> MediasoupBotClient
     this.agentPipelines = new Map(); // Map of agentId -> audio pipelines
@@ -121,9 +123,9 @@ class AgentManager {
 
       let newAgent;
       if (personaType) {
-        newAgent = Agent.createWithPersona(personaType);
+        newAgent = Agent.createWithPersona(personaType, this);
       } else {
-        newAgent = new Agent(persona || "You are an AI agent participating in a conversation.", agentId);
+        newAgent = new Agent(persona || "You are an AI agent participating in a conversation.", agentId, config || {}, this);
       }
 
       this.addAgent(newAgent);
@@ -252,6 +254,26 @@ class AgentManager {
 
     this.agents.set(agent.agentId, agent);
     console.log(`🤖 Agent ${agent.agentId} added to manager (${this.agents.size}/${this.maxAgents})`);
+    
+    // Emit agent created event
+    this.emit('agent:created', {
+      agentId: agent.agentId,
+      persona: agent.persona,
+      status: agent.status,
+      roomId: agent.roomId,
+      createdAt: agent.createdAt,
+      metadata: {
+        totalMessages: agent.metadata.totalMessages,
+        llmCalls: agent.metadata.llmCalls,
+        ttsCalls: agent.metadata.ttsCalls,
+        voiceInteractions: agent.metadata.voiceInteractions
+      },
+      config: {
+        llm: agent.config.llm,
+        tts: agent.config.tts
+      }
+    });
+    
     return true;
   }
 
@@ -266,8 +288,15 @@ class AgentManager {
       return false;
     }
 
+    const agent = this.agents.get(agentId);
     this.agents.delete(agentId);
     console.log(`🗑️ Agent ${agentId} removed from manager (${this.agents.size}/${this.maxAgents})`);
+    
+    // Emit agent deleted event
+    this.emit('agent:deleted', {
+      agentId: agentId
+    });
+    
     return true;
   }
 
@@ -305,12 +334,12 @@ class AgentManager {
    * @param {string} agentId - Optional custom agent ID
    * @returns {Agent} The created agent
    */
-  createAgent(persona, agentId = null) {
+  createAgent(persona, agentId = null, config = {}) {
     if (this.agents.size >= this.maxAgents) {
       throw new Error(`Cannot create agent: maximum limit (${this.maxAgents}) reached`);
     }
 
-    const agent = new Agent(persona, agentId);
+    const agent = new Agent(persona, agentId, config, this);
     this.addAgent(agent);
     return agent;
   }
@@ -586,6 +615,14 @@ class AgentManager {
         type: 'speech'
       });
 
+      // Emit speaking start event
+      this.emit('agent:speaking:start', {
+        agentId,
+        roomId,
+        message,
+        timestamp: new Date().toISOString()
+      });
+
       // Broadcast speaking event
       await redisService.publish('agent:speaking', JSON.stringify({
         agentId,
@@ -640,6 +677,13 @@ class AgentManager {
       }
 
       console.log(`🤐 Agent ${agentId} stopped speaking in room ${roomId}`);
+
+      // Emit speaking end event
+      this.emit('agent:speaking:end', {
+        agentId,
+        roomId,
+        timestamp: new Date().toISOString()
+      });
 
       // Process next in queue
       await this._processNextSpeaker(roomId);

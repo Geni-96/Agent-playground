@@ -53,28 +53,20 @@ io.on('connection', (socket) => {
   // Send current system status on connect
   socket.emit('system:status', {
     connectedClients: connectedClients.size,
-    agentCount: agentManager.getAllAgents().length,
+    agents: agentManager.getAllAgents().length,
     services: {
-      redis: !!redisService.isConnectedToRedis(),
-      llm: !!llmService.isReady(),
-      tts: !!ttsService.isReady(),
-      asr: !!asrService.isReady(),
+      redis: redisService.isConnectedToRedis(),
+      llm: llmService.isReady(),
+      tts: ttsService.isReady(),
+      asr: asrService.isReady(),
     }
   });
 });
 
 // Function to broadcast events to all connected clients
 const broadcast = (event, data) => {
-  try {
-    // Create a safe copy of data to prevent circular references
-    const safeData = JSON.parse(JSON.stringify(data));
-    io.emit(event, safeData);
-    console.log(`📡 Broadcasting ${event}:`, safeData);
-  } catch (error) {
-    console.error(`❌ Error broadcasting ${event}:`, error.message);
-    // Fallback: send a simplified version
-    io.emit(event, { error: 'Data serialization failed' });
-  }
+  io.emit(event, data);
+  console.log(`📡 Broadcasting ${event}:`, data);
 };
 
 // Set up Agent Manager event listeners for real-time updates
@@ -129,13 +121,13 @@ app.get('/system/status', (req, res) => {
     status: 'running',
     timestamp: new Date().toISOString(),
     connectedClients: connectedClients.size,
-    agentCount: agentManager.getAllAgents().length,
+    agents: agentManager.getAllAgents().length,
     services: {
-      redis: !!redisService.isConnectedToRedis(),
-      llm: !!llmService.isReady(),
-      tts: !!ttsService.isReady(),
-      asr: !!asrService.isReady(),
-      audioPipeline: !!audioPipelineService.isReady()
+      redis: redisService.isConnectedToRedis(),
+      llm: llmService.isReady(),
+      tts: ttsService.isReady(),
+      asr: asrService.isReady(),
+      audioPipeline: audioPipelineService.isReady()
     }
   });
 });

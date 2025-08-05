@@ -11,14 +11,16 @@ class Agent {
    * @param {string} persona - The system prompt/persona for this agent
    * @param {string} agentId - Optional custom agent ID (auto-generated if not provided)
    * @param {Object} config - Optional configuration for LLM and TTS
+   * @param {EventEmitter} eventEmitter - Optional event emitter for status updates
    */
-  constructor(persona, agentId = null, config = {}) {
+  constructor(persona, agentId = null, config = {}, eventEmitter = null) {
     this.agentId = agentId || uuidv4();
     this.persona = persona;
     this.messageHistory = [];
     this.status = 'idle'; // idle, speaking, listening, processing, thinking
     this.createdAt = new Date().toISOString();
     this.lastActivity = new Date().toISOString();
+    this.eventEmitter = eventEmitter; // Store reference to event emitter
     this.metadata = {
       totalMessages: 0,
       totalSpeakingTime: 0,
@@ -106,6 +108,16 @@ class Agent {
     this.lastActivity = new Date().toISOString();
 
     console.log(`🔄 Agent ${this.agentId} status changed: ${previousStatus} → ${newStatus}`);
+    
+    // Emit status change event if event emitter is available
+    if (this.eventEmitter) {
+      this.eventEmitter.emit('agent:status:changed', {
+        agentId: this.agentId,
+        status: newStatus,
+        previousStatus: previousStatus,
+        timestamp: this.lastActivity
+      });
+    }
   }
 
   /**
@@ -578,7 +590,7 @@ class Agent {
    * @param {string} personaType - Type of persona (helpful, creative, analytical, etc.)
    * @returns {Agent} New agent with predefined persona
    */
-  static createWithPersona(personaType) {
+  static createWithPersona(personaType, eventEmitter = null) {
     const personas = {
       helpful: "You are a helpful and friendly AI assistant. You always try to be supportive and provide useful information.",
       creative: "You are a creative and imaginative AI. You love to think outside the box and come up with innovative ideas.",
@@ -589,7 +601,7 @@ class Agent {
     };
 
     const persona = personas[personaType] || personas.default;
-    return new Agent(persona);
+    return new Agent(persona, null, {}, eventEmitter);
   }
 }
 
