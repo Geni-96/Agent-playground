@@ -6,20 +6,25 @@
 
 The Stream-Aware Agent Playground is an AI Agent Simulator designed to test and demonstrate multi-agent interactions. Each agent has its own persona (system prompt), and agents can communicate through various channels. This project is built on Node.js with Express and uses Redis as a message bus for agent coordination.
 
-## ✨ Features (Phase 1 Complete)
+## ✨ Features (Phase 2 Complete)
 
 - ✅ **Multi-Agent System**: Create and manage multiple AI agents with unique personas
 - ✅ **Message Bus**: Redis-powered pub/sub system for agent communication
 - ✅ **REST API**: HTTP endpoints to interact with agents
 - ✅ **Agent Orchestration**: Centralized agent management and coordination
 - ✅ **Real-time Communication**: Agents can send direct messages or broadcast to all
+- ✅ **LLM Integration**: Intelligent responses using OpenAI GPT or Anthropic Claude
+- ✅ **Text-to-Speech**: Voice synthesis using ElevenLabs, Azure TTS, or PlayHT
+- ✅ **Smart Agents**: Agents can think, respond intelligently, and speak their responses
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js (v18 or higher)
 - Redis Server (running locally or accessible remotely)
+- **NEW**: API keys for at least one LLM provider (OpenAI or Anthropic)
+- **NEW**: API keys for at least one TTS provider (ElevenLabs, Azure TTS, or PlayHT)
 
 ### Installation
 
@@ -29,21 +34,50 @@ The Stream-Aware Agent Playground is an AI Agent Simulator designed to test and 
    npm install
    ```
 
-2. **Start Redis Server:**
+2. **Configure environment variables:**
+   ```bash
+   # Copy the example environment file
+   cp .env.example .env
+   
+   # Edit .env and add your API keys:
+   # Required: At least one LLM provider
+   OPENAI_API_KEY=your_openai_api_key_here
+   # OR
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+   # Required: At least one TTS provider
+   ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+   # OR
+   AZURE_TTS_KEY=your_azure_tts_key_here
+   AZURE_TTS_REGION=your_azure_region_here
+   # OR
+   PLAYHT_API_KEY=your_playht_api_key_here
+   PLAYHT_USER_ID=your_playht_user_id_here
+   ```
+
+3. **Start Redis Server:**
    ```bash
    # On macOS with Homebrew
    brew services start redis
    
    # Or run directly
    redis-server
+   
+   # Or with Docker
+   docker run -d -p 6379:6379 redis:latest
    ```
 
-3. **Start the application:**
+4. **Test the setup:**
+   ```bash
+   npm run test:phase2
+   ```
+
+5. **Start the application:**
    ```bash
    npm start
    ```
 
-4. **Verify it's running:**
+6. **Verify it's running:**
    ```bash
    curl http://localhost:3000/health
    ```
@@ -76,27 +110,45 @@ Content-Type: application/json
 agent-simulator/
 ├── app.js                     # Main Express server
 ├── agents/
-│   └── Agent.js              # Agent class definition
+│   └── Agent.js              # Enhanced Agent class with LLM/TTS integration
 ├── services/
-│   └── redisService.js       # Redis pub/sub service
+│   ├── redisService.js       # Redis pub/sub service
+│   ├── llmService.js         # LLM integration (OpenAI, Anthropic)
+│   └── ttsService.js         # Text-to-Speech service (ElevenLabs, Azure, PlayHT)
 ├── orchestrator/
 │   └── agentManager.js       # Agent management and orchestration
+├── test-phase2.js            # Phase 2 integration tests
+├── .env.example              # Environment configuration template
 └── package.json
 ```
 
 ### Core Components
 
 #### 1. Agent Class (`/agents/Agent.js`)
-- Represents individual AI agents with unique personas
-- Manages message history and status tracking
-- Handles message processing (foundation for future LLM integration)
+- Represents individual AI agents with unique personas and configurations
+- **NEW**: Integrates with LLM services for intelligent response generation
+- **NEW**: Supports Text-to-Speech for voice output
+- **NEW**: Advanced message processing with context awareness
+- Manages message history and status tracking (idle, thinking, speaking, etc.)
 
 #### 2. Redis Service (`/services/redisService.js`)
 - Manages Redis connections for pub/sub messaging
 - Handles agent communication channels
 - Provides reliable message delivery
 
-#### 3. Agent Manager (`/orchestrator/agentManager.js`)
+#### 3. **NEW**: LLM Service (`/services/llmService.js`)
+- Integrates with multiple LLM providers (OpenAI GPT, Anthropic Claude)
+- Handles prompt templating and conversation context
+- Provides token usage tracking and rate limiting
+- Supports configurable model parameters
+
+#### 4. **NEW**: TTS Service (`/services/ttsService.js`)
+- Supports multiple TTS providers (ElevenLabs, Azure TTS, PlayHT)
+- Manages voice profiles for different agents
+- Handles audio format conversion for WebRTC compatibility
+- Provides audio caching for performance
+
+#### 5. Agent Manager (`/orchestrator/agentManager.js`)
 - Orchestrates all agents in the simulation
 - Listens to Redis channels for agent lifecycle events
 - Manages agent creation, deletion, and message routing
@@ -158,23 +210,36 @@ PUBLISH agent:broadcast '{"content": "Hello everyone!", "from": "system"}'
 PORT=8080 REDIS_HOST=redis.example.com MAX_AGENTS=20 npm start
 ```
 
-## 📈 Phase 1 Implementation Status
+## 📈 Implementation Status
 
-### ✅ Completed Tasks
-- [x] Initialize Node.js project (npm init -y)
-- [x] Install initial dependencies: express, redis, uuid
-- [x] Create project folder structure: /agents, /services, /orchestrator
-- [x] Set up basic Express server in app.js
-- [x] Implement Redis connection and pub/sub logic in /services/redisService.js
-- [x] Define Agent class structure in /agents/Agent.js
-- [x] Implement core logic for AgentManager in /orchestrator/agentManager.js
-- [x] Connect AgentManager to Redis service for control messages
+### ✅ Phase 1 Completed
+- [x] Node.js/Express Application
+- [x] Redis Message Bus Service  
+- [x] Agent Class Foundation
+- [x] Agent Manager (Orchestrator)
+- [x] Basic REST API
 
-### 🏆 Acceptance Criteria Met
-- ✅ Node.js/Express Application Initialized
-- ✅ Message Bus Service Created (Redis)
-- ✅ Agent Class Defined
-- ✅ Agent Manager (Orchestrator) Implemented
+### ✅ Phase 2 Completed - AI and Voice Services Integration
+- [x] LLM Service Implementation
+  - [x] OpenAI GPT integration
+  - [x] Anthropic Claude integration
+  - [x] Prompt templating system
+  - [x] Token usage tracking and rate limiting
+- [x] TTS Service Implementation
+  - [x] ElevenLabs integration
+  - [x] Azure TTS integration
+  - [x] PlayHT integration
+  - [x] Voice profile management
+  - [x] Audio caching system
+- [x] Enhanced Agent Class
+  - [x] LLM-powered response generation
+  - [x] Text-to-Speech capabilities
+  - [x] Advanced message processing
+  - [x] Configuration management
+- [x] Environment Configuration
+  - [x] API key management
+  - [x] Service configuration options
+  - [x] Documentation and examples
 
 ## 🛠️ Development Notes
 
@@ -193,11 +258,11 @@ PORT=8080 REDIS_HOST=redis.example.com MAX_AGENTS=20 npm start
 
 ## 🔮 Future Phases
 
-- **Phase 2**: LLM Integration (OpenAI/Anthropic APIs)
-- **Phase 3**: Text-to-Speech (TTS) and Speech-to-Text (STT)
-- **Phase 4**: Mediasoup WebRTC Integration
-- **Phase 5**: Web Interface and Real-time Dashboard
-- **Phase 6**: RAG (Retrieval-Augmented Generation) Modules
+- **Phase 3**: Mediasoup WebRTC Integration for Real-time Audio Streaming
+- **Phase 4**: Audio Transcription (ASR) and Voice-first Agent Interactions
+- **Phase 5**: Advanced Turn-taking Logic and Agent Coordination
+- **Phase 6**: Web Interface and Real-time Dashboard
+- **Phase 7**: RAG (Retrieval-Augmented Generation) and Tool Integration
 
 ## 🤝 Contributing
 
