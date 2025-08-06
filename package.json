@@ -10,6 +10,7 @@
     "test:phase1": "node test-phase1.js",
     "test:phase2": "node test-phase2.js",
     "test:phase3": "./test-phase3.sh",
+    "test:phase4": "./test-phase4.sh",
     "test:api": "./test-api.sh"
   },
   "keywords": [],
