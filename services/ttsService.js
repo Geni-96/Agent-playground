@@ -282,7 +282,7 @@ class TTSService {
    */
   _getDefaultVoice() {
     if (this.providers.elevenlabs) {
-      return 'ErXwobaYiN019PkySvjV'; // Default ElevenLabs voice
+      return 'ErXwobaYiN019PkySvjV'; // Default ElevenLabs voice 9BWtsMINqrJLrRacOk9x
     } else if (this.providers.azure) {
       return 'en-US-AriaNeural'; // Default Azure voice
     } else if (this.providers.playht) {

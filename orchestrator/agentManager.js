@@ -23,7 +23,7 @@ class AgentManager extends EventEmitter {
     this.isInitialized = false;
     this.maxAgents = parseInt(process.env.MAX_AGENTS) || 10;
     this.maxAgentsPerRoom = parseInt(process.env.MAX_AGENTS_PER_ROOM) || 5;
-    this.mediasoupServerUrl = process.env.MEDIASOUP_SERVER_URL || 'ws://localhost:5001';
+    this.mediasoupServerUrl = process.env.MEDIASOUP_SERVER_URL || 'http://localhost:5001';
     this.speakingTimeLimit = parseInt(process.env.SPEAKING_TIME_LIMIT) || 30000; // 30 seconds
     this.channels = {
       CREATE_AGENT: 'agent:create',
