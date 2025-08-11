@@ -34,8 +34,8 @@ describe('MCP Audio Integration Tests', () => {
       const toolStatus = await client.testMCPAudioTools();
       
       assert.strictEqual(typeof toolStatus, 'object');
-      assert.strictEqual(typeof toolStatus.produce_audio, 'boolean');
-      assert.strictEqual(typeof toolStatus.get_human_audio, 'boolean');
+      assert.strictEqual(typeof toolStatus.produce_audio_stream, 'boolean');
+      assert.strictEqual(typeof toolStatus.consume_audio_stream, 'boolean');
     });
   });
 

@@ -7,11 +7,14 @@ The MediasoupBotClient has been updated to support real audio operations through
 ## Prerequisites
 
 - MCP server running at `http://localhost:5002/mcp`
-- MCP server must have the following tools enabled:
-  - `produce_audio`: Send audio to Mediasoup room
-  - `get_human_audio`: Consume audio from participants
-  - `get_audio_participants`: List audio-capable participants
-  - `get_audio_stats`: Get audio operation statistics
+- MCP server must have the following tools enabled (as defined in mcp.json):
+  - `produce_audio_stream`: Send audio to Mediasoup room
+  - `consume_audio_stream`: Consume audio from participants
+  - `join_room`: Join a Mediasoup room
+  - `leave_room`: Leave a Mediasoup room  
+  - `send_message`: Send message to room
+  - `get_room_info`: Get room information
+  - `list_participants`: List room participants
 
 ## New Methods
 
@@ -285,10 +288,10 @@ node examples/mcp-audio-integration.js
 
 The MCP server must implement these tools for full functionality:
 
-### `produce_audio`
+### `produce_audio_stream`
 ```json
 {
-  "name": "produce_audio",
+  "name": "produce_audio_stream",
   "description": "Send audio to Mediasoup room",
   "inputSchema": {
     "type": "object",
@@ -304,10 +307,10 @@ The MCP server must implement these tools for full functionality:
 }
 ```
 
-### `get_human_audio`
+### `consume_audio_stream`
 ```json
 {
-  "name": "get_human_audio",
+  "name": "consume_audio_stream",
   "description": "Get audio from participant",
   "inputSchema": {
     "type": "object",
