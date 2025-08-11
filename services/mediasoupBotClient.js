@@ -3,7 +3,34 @@ const axios = require('axios');
 
 /**
  * Mediasoup Bot Client using MCP server
- * Simplified client that uses MCP server for all WebRTC operations
+ * Provides WebRTC audio communication through MCP (Model Context Protocol) server integration.
+ * 
+ * Key Features:
+ * - Real audio production via MCP produce_audio tool
+ * - Audio consumption from participants via MCP get_human_audio tool
+ * - Base64 audio buffer handling for JSON-RPC compatibility
+ * - Event-driven architecture for real-time audio operations
+ * - Backward compatibility with legacy audio methods
+ * 
+ * MCP Audio Tools:
+ * - produce_audio: Send TTS audio to Mediasoup room
+ * - get_human_audio: Consume audio from any participant
+ * - get_audio_participants: List participants with audio capabilities
+ * - get_audio_stats: Get audio operation statistics
+ * 
+ * @example
+ * const client = new MediasoupBotClient('http://localhost:5002/mcp');
+ * await client.connect('room-123', 'agent-alice');
+ * 
+ * // Send TTS audio to room
+ * const audioBuffer = await ttsService.generateSpeech('Hello world!', 'alice');
+ * const producerId = await client.produceAudioFromBuffer(audioBuffer);
+ * 
+ * // Listen to human participant
+ * const humanAudio = await client.consumeParticipantAudio('human-123', {
+ *   durationMs: 3000,
+ *   format: 'mp3'
+ * });
  */
 class MediasoupBotClient extends EventEmitter {
   constructor(mcpServerUrl = 'http://localhost:5002/mcp') {
@@ -140,41 +167,215 @@ class MediasoupBotClient extends EventEmitter {
   }
 
   /**
-   * Produce audio stream (simplified for MCP)
-   * Since MCP server handles WebRTC, we just notify about audio production
-   * @param {MediaStreamTrack} track - Audio track from TTS
-   * @param {Object} options - Producer options
-   * @returns {string} Producer ID
+   * Produce audio from buffer using MCP server
+   * Sends TTS audio buffer to the room via MCP produce_audio tool
+   * @param {Buffer} audioBuffer - Audio data buffer from TTS
+   * @param {Object} options - Audio production options
+   * @param {string} options.format - Audio format (default: 'mp3')
+   * @param {number} options.sampleRate - Sample rate (default: 24000)
+   * @param {number} options.channels - Number of channels (default: 1)
+   * @returns {Promise<string>} Producer ID
    */
-  async produceAudio(track, options = {}) {
+  async produceAudioFromBuffer(audioBuffer, options = {}) {
     if (!this.connected) {
       throw new Error('Not connected to room');
     }
 
-    try {
-      // For MCP integration, we'll simulate audio production
-      // The actual audio streaming is handled by the MCP server
-      const producerId = `producer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (!audioBuffer || !Buffer.isBuffer(audioBuffer)) {
+      throw new Error('Invalid audio buffer provided');
+    }
 
-      console.log(`🎵 Audio producer simulated: ${producerId}`);
-      this.emit('audioProduced', { producerId, track });
+    try {
+      const {
+        format = 'mp3',
+        sampleRate = 24000,
+        channels = 1
+      } = options;
+
+      // Convert buffer to base64 for JSON-RPC compatibility
+      const audioBase64 = audioBuffer.toString('base64');
+
+      // Call MCP produce_audio tool
+      const result = await this._callMCPTool('produce_audio', {
+        roomId: this.roomId,
+        agentName: this.peerId,
+        audioData: audioBase64,
+        format: format,
+        sampleRate: sampleRate,
+        channels: channels
+      });
+
+      const producerId = result.producerId || `producer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log(`🎵 Audio produced via MCP: ${producerId} (${audioBuffer.length} bytes, ${format})`);
+      this.emit('audioProduced', { 
+        producerId, 
+        audioBuffer, 
+        format, 
+        sampleRate, 
+        channels,
+        result 
+      });
 
       return producerId;
 
     } catch (error) {
-      console.error(`❌ Failed to produce audio:`, error);
+      console.error(`❌ Failed to produce audio via MCP:`, error);
       throw error;
     }
   }
 
   /**
-   * Stop audio production (simplified for MCP)
+   * Consume audio from any participant in the room via MCP server
+   * Fetches audio stream from specified participant using MCP get_human_audio tool
+   * @param {string} participantId - ID of participant to consume audio from
+   * @param {Object} options - Audio consumption options
+   * @param {number} options.durationMs - Duration to capture in milliseconds (default: 5000)
+   * @param {string} options.format - Desired audio format (default: 'mp3')
+   * @param {number} options.sampleRate - Desired sample rate (default: 24000)
+   * @returns {Promise<Object>} Consumer info with audio data
+   */
+  async consumeParticipantAudio(participantId, options = {}) {
+    if (!this.connected) {
+      throw new Error('Not connected to room');
+    }
+
+    if (!participantId) {
+      throw new Error('Participant ID is required');
+    }
+
+    try {
+      const {
+        durationMs = 5000,
+        format = 'mp3',
+        sampleRate = 24000
+      } = options;
+
+      // Call MCP get_human_audio tool
+      const result = await this._callMCPTool('get_human_audio', {
+        roomId: this.roomId,
+        participantId: participantId,
+        durationMs: durationMs,
+        format: format,
+        sampleRate: sampleRate
+      });
+
+      const consumerId = result.consumerId || `consumer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Convert base64 audio data back to buffer if provided
+      let audioBuffer = null;
+      if (result.audioData) {
+        audioBuffer = Buffer.from(result.audioData, 'base64');
+      }
+
+      console.log(`🎧 Audio consumed via MCP: ${consumerId} from participant ${participantId} (${audioBuffer ? audioBuffer.length : 0} bytes)`);
+      
+      const consumerInfo = {
+        consumerId,
+        participantId,
+        audioBuffer,
+        format,
+        sampleRate,
+        durationMs,
+        timestamp: new Date().toISOString(),
+        result
+      };
+
+      this.emit('audioConsumed', consumerInfo);
+
+      return consumerInfo;
+
+    } catch (error) {
+      console.error(`❌ Failed to consume participant audio via MCP:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Produce audio stream (deprecated - use produceAudioFromBuffer instead)
+   * @deprecated Use produceAudioFromBuffer for MCP integration
+   * @param {MediaStreamTrack} track - Audio track from TTS
+   * @param {Object} options - Producer options
+   * @returns {string} Producer ID
+   */
+  async produceAudio(track, options = {}) {
+    console.warn('⚠️ produceAudio is deprecated. Use produceAudioFromBuffer for MCP integration.');
+    
+    if (!this.connected) {
+      throw new Error('Not connected to room');
+    }
+
+    try {
+      // Legacy simulation for backward compatibility
+      const producerId = `legacy_producer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log(`🎵 Audio producer (legacy): ${producerId}`);
+      this.emit('audioProduced', { producerId, track });
+
+      return producerId;
+
+    } catch (error) {
+      console.error(`❌ Failed to produce audio (legacy):`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Consume audio from another participant (deprecated - use consumeParticipantAudio instead)
+   * @deprecated Use consumeParticipantAudio for MCP integration
+   * @param {string} producerId - Remote producer ID
+   * @param {Object} rtpParameters - RTP parameters
+   * @returns {string} Consumer ID
+   */
+  async consumeAudio(producerId, rtpParameters) {
+    console.warn('⚠️ consumeAudio is deprecated. Use consumeParticipantAudio for MCP integration.');
+    
+    if (!this.connected) {
+      throw new Error('Not connected to room');
+    }
+
+    try {
+      // Legacy simulation for backward compatibility
+      const consumerId = `legacy_consumer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log(`🎧 Audio consumer (legacy): ${consumerId}`);
+      this.emit('audioConsumed', { 
+        consumerId, 
+        producerId, 
+        track: null
+      });
+
+      return consumerId;
+
+    } catch (error) {
+      console.error(`❌ Failed to consume audio (legacy):`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop audio production
    * @param {string} producerId - Producer ID to stop
    */
   async stopAudioProduction(producerId) {
     try {
+      // For MCP-produced audio, we could call a stop_audio_production tool if available
+      // For now, we'll emit the event for both MCP and legacy producers
       console.log(`🛑 Stopped audio production: ${producerId}`);
       this.emit('audioProductionStopped', { producerId });
+
+      // Optional: Call MCP tool to stop production if available
+      if (this.connected && !producerId.startsWith('legacy_')) {
+        try {
+          await this._callMCPTool('stop_audio_production', {
+            roomId: this.roomId,
+            producerId: producerId
+          });
+        } catch (error) {
+          // MCP server might not have this tool yet, so we'll just log the warning
+          console.warn(`⚠️ MCP stop_audio_production tool not available: ${error.message}`);
+        }
+      }
 
     } catch (error) {
       console.error(`❌ Error stopping audio production:`, error);
@@ -183,44 +384,26 @@ class MediasoupBotClient extends EventEmitter {
   }
 
   /**
-   * Consume audio from another participant (simplified for MCP)
-   * @param {string} producerId - Remote producer ID
-   * @param {Object} rtpParameters - RTP parameters
-   * @returns {string} Consumer ID
-   */
-  async consumeAudio(producerId, rtpParameters) {
-    if (!this.connected) {
-      throw new Error('Not connected to room');
-    }
-
-    try {
-      // For MCP integration, we'll simulate audio consumption
-      // The actual audio streaming is handled by the MCP server
-      const consumerId = `consumer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      console.log(`🎧 Audio consumer simulated: ${consumerId}`);
-      this.emit('audioConsumed', { 
-        consumerId, 
-        producerId, 
-        track: null // MCP server handles the actual track
-      });
-
-      return consumerId;
-
-    } catch (error) {
-      console.error(`❌ Failed to consume audio:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Stop audio consumption (simplified for MCP)
+   * Stop audio consumption
    * @param {string} consumerId - Consumer ID to stop
    */
   async stopAudioConsumption(consumerId) {
     try {
       console.log(`🛑 Stopped audio consumption: ${consumerId}`);
       this.emit('audioConsumptionStopped', { consumerId });
+
+      // Optional: Call MCP tool to stop consumption if available
+      if (this.connected && !consumerId.startsWith('legacy_')) {
+        try {
+          await this._callMCPTool('stop_audio_consumption', {
+            roomId: this.roomId,
+            consumerId: consumerId
+          });
+        } catch (error) {
+          // MCP server might not have this tool yet, so we'll just log the warning
+          console.warn(`⚠️ MCP stop_audio_consumption tool not available: ${error.message}`);
+        }
+      }
 
     } catch (error) {
       console.error(`❌ Error stopping audio consumption:`, error);
@@ -229,17 +412,107 @@ class MediasoupBotClient extends EventEmitter {
   }
 
   /**
-   * Get audio statistics (simplified for MCP)
+   * Get audio statistics including MCP operations
    * @returns {Object} Audio stats
    */
   async getAudioStats() {
-    // Return simplified stats since MCP server handles the details
-    return {
-      connected: this.connected,
-      roomId: this.roomId,
-      peerId: this.peerId,
-      timestamp: new Date().toISOString()
+    try {
+      const baseStats = {
+        connected: this.connected,
+        roomId: this.roomId,
+        peerId: this.peerId,
+        timestamp: new Date().toISOString(),
+        mcpServerUrl: this.mcpServerUrl
+      };
+
+      // Try to get additional stats from MCP server if available
+      if (this.connected) {
+        try {
+          const mcpStats = await this._callMCPTool('get_audio_stats', {
+            roomId: this.roomId,
+            agentName: this.peerId
+          });
+          
+          return {
+            ...baseStats,
+            mcp: mcpStats
+          };
+        } catch (error) {
+          // MCP server might not have audio stats tool yet
+          console.warn(`⚠️ MCP get_audio_stats tool not available: ${error.message}`);
+        }
+      }
+
+      return baseStats;
+
+    } catch (error) {
+      console.error(`❌ Error getting audio stats:`, error);
+      // Return basic stats even if MCP call fails
+      return {
+        connected: this.connected,
+        roomId: this.roomId,
+        peerId: this.peerId,
+        timestamp: new Date().toISOString(),
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get available audio participants in the room
+   * @returns {Promise<Array>} List of participants with audio capabilities
+   */
+  async getAudioParticipants() {
+    if (!this.connected) {
+      throw new Error('Not connected to room');
+    }
+
+    try {
+      const result = await this._callMCPTool('get_audio_participants', {
+        roomId: this.roomId
+      });
+
+      return result.participants || [];
+
+    } catch (error) {
+      console.warn(`⚠️ MCP get_audio_participants tool not available: ${error.message}`);
+      // Fallback to regular participants list
+      try {
+        const participants = await this.listParticipants();
+        return participants.filter(p => p.hasAudio !== false);
+      } catch (fallbackError) {
+        console.error(`❌ Failed to get audio participants:`, fallbackError);
+        return [];
+      }
+    }
+  }
+
+  /**
+   * Test MCP audio tools availability
+   * @returns {Promise<Object>} Tool availability status
+   */
+  async testMCPAudioTools() {
+    const tools = {
+      produce_audio: false,
+      get_human_audio: false,
+      stop_audio_production: false,
+      stop_audio_consumption: false,
+      get_audio_stats: false,
+      get_audio_participants: false
     };
+
+    for (const toolName of Object.keys(tools)) {
+      try {
+        // Test with minimal parameters to check tool availability
+        await this._callMCPTool(toolName, { test: true });
+        tools[toolName] = true;
+      } catch (error) {
+        // Tool not available or test failed
+        console.warn(`⚠️ MCP tool ${toolName} not available: ${error.message}`);
+      }
+    }
+
+    return tools;
   }
 
   /**
